@@ -2,6 +2,10 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/jakebailey/plugingen)](https://goreportcard.com/report/github.com/jakebailey/plugingen) [![Build Status](https://travis-ci.com/jakebailey/plugingen.svg?branch=master)](https://travis-ci.com/jakebailey/plugingen)
 
+```
+go get -u github.com/jakebailey/plugingen
+```
+
 plugingen generates code to use arbitrary interfaces with hashicorp's
 [go-plugin](https://github.com/hashicorp/go-plugin), including the use of `MuxBroker`
 to support other interfaces as arguments.
