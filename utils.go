@@ -11,3 +11,7 @@ func isError(t types.Type) bool {
 	iface, ok := t.Underlying().(*types.Interface)
 	return ok && iface.String() == "interface{Error() string}"
 }
+
+func isPluggable(t types.Type) bool {
+	return types.IsInterface(t) && !isEmptyInterface(t) && !isError(t)
+}

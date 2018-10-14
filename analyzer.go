@@ -8,7 +8,7 @@ import (
 )
 
 type Analyzer struct {
-	done       map[string]bool
+	done       map[string]*Interface
 	interfaces []*Interface
 
 	cache typeutil.MethodSetCache
@@ -16,7 +16,7 @@ type Analyzer struct {
 
 func NewAnalyzer() *Analyzer {
 	return &Analyzer{
-		done: map[string]bool{},
+		done: map[string]*Interface{},
 	}
 }
 
@@ -33,22 +33,23 @@ type Method struct {
 }
 
 type Var struct {
-	name string
-	typ  types.Type
+	name  string
+	typ   types.Type
+	iface *Interface
 }
 
-func (a *Analyzer) analyze(t types.Type) {
+func (a *Analyzer) analyze(t types.Type) *Interface {
 	typeString := t.String()
 
-	if a.done[typeString] {
-		return
+	if iface, ok := a.done[typeString]; ok {
+		return iface
 	}
-
-	a.done[typeString] = true
 
 	iface := &Interface{
 		typ: t,
 	}
+
+	a.done[typeString] = iface
 
 	for _, sel := range typeutil.IntuitiveMethodSet(t, &a.cache) {
 		o := sel.Obj()
@@ -82,8 +83,8 @@ func (a *Analyzer) analyze(t types.Type) {
 				typ:  typ,
 			}
 
-			if types.IsInterface(typ) && !isEmptyInterface(typ) && !isError(typ) {
-				a.analyze(typ)
+			if isPluggable(typ) {
+				v.iface = a.analyze(typ)
 			}
 
 			method.params = append(method.params, v)
@@ -97,7 +98,7 @@ func (a *Analyzer) analyze(t types.Type) {
 				typ:  typ,
 			}
 
-			if types.IsInterface(typ) && !isEmptyInterface(typ) && !isError(typ) {
+			if isPluggable(typ) {
 				log.Fatalf("returning an interface is unsupported: %s.%s", typeString, methodName)
 			}
 
@@ -108,6 +109,7 @@ func (a *Analyzer) analyze(t types.Type) {
 	}
 
 	a.interfaces = append(a.interfaces, iface)
+	return iface
 }
 
 func tupleToSlice(tuple *types.Tuple) []*types.Var {
