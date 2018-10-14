@@ -17,6 +17,7 @@ plugingen comes with a few caveats:
     that the package where the generated code lives will fill with types for
     function parameters and return values. This is somewhat mitigated by
     prepending `Z_` to generated types, but it's still noisy.
+- plugingen does not generate gRPC plugins. Maybe in the future.
 
 
 ## An example
@@ -100,3 +101,21 @@ func (s *ProcessorRPCServer) Process(params *Z_Processor_ProcessParams, _ *inter
 	return nil
 }
 ```
+
+## TODOs
+
+- Fix name collisions. If two interfaces are named the same thing, ignoring
+	package names, then the output code will be broken. Interfaces coming from
+	outside packages should include a prefix which summarizes their full name.
+- Support variadic arguments of interfaces. This is technically doable just by
+	inserting a for loop to broker each.
+- Work out some quirks with printing type information. I use `Underlying()`
+	quite a bit, which results in some cases where names get lost.
+- Allow replacement of `net/rpc` and `hashicorp/go-plugin`. `net/rpc` is
+	frozen, and doesn't have context support (and never will). The "solution"
+	is to use gRPC, but that may pretty massively increase the footprint of
+	this generator (to keep in tune with backwards compatibility), so it may
+	be simpler to allow using a fork of `net/rpc` like
+	[keegancsmith/rpc](https://github.com/keegancsmith/rpc) which allow for
+	context. This would also require maintaining a fork of `go-plugin`.
+- Testing. This is largely untested.
