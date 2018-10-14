@@ -125,3 +125,5 @@ func (s *ProcessorRPCServer) Process(params *Z_Processor_ProcessParams, _ *inter
 	[keegancsmith/rpc](https://github.com/keegancsmith/rpc) which allow for
 	context. This would also require maintaining a fork of `go-plugin`.
 - Testing. This is largely untested.
+- Generate a handshake. This would probably involve hashing all of the
+	names/types into `MagicCookieValue`.
