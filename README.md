@@ -32,6 +32,7 @@ type Finder interface {
 This tool will generate the following (trimming out type declarations):
 
 ```go
+// Find implements Find for the Finder interface.
 func (c *FinderRPCClient) Find(p0 string, p1 string) (int, bool) {
 	params := &Z_Finder_FindParams{
 		P0: p0,
@@ -55,7 +56,6 @@ func (s *FinderRPCServer) Find(params *Z_Finder_FindParams, results *Z_Finder_Fi
 
 	return nil
 }
-
 ```
 
 ## A more complicated example
@@ -72,12 +72,13 @@ This interface requires a function which accepts an `io.ReadCloser`,
 which cannot necessarily be serialized. plugingen produces this code to handle the interface:
 
 ```go
+// Process implements Process for the Processor interface.
 func (c *ProcessorRPCClient) Process(p0 io.ReadCloser) {
 	p0id := c.broker.NextId()
-	go c.broker.AcceptAndServe(p0id, &ReadCloserRPCServer{impl: p0})
+	go c.broker.AcceptAndServe(p0id, NewReadCloserRPCServer(c.broker, p0))
 
 	params := &Z_Processor_ProcessParams{P0ID: p0id}
-	results := &Z_Processor_ProcessResults{}
+	results := new(interface{})
 
 	if err := c.client.Call("Plugin.Process", params, results); err != nil {
 		log.Println("RPC call to Processor.Process failed:", err.Error())
@@ -85,7 +86,7 @@ func (c *ProcessorRPCClient) Process(p0 io.ReadCloser) {
 }
 
 // Process implements the server side of net/rpc calls to Process.
-func (s *ProcessorRPCServer) Process(params *Z_Processor_ProcessParams, results *Z_Processor_ProcessResults) error {
+func (s *ProcessorRPCServer) Process(params *Z_Processor_ProcessParams, _ *interface{}) error {
 	p0conn, err := s.broker.Dial(params.P0ID)
 	if err != nil {
 		return err

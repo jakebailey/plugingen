@@ -169,26 +169,30 @@ func (gen *Generator) generateRPCMethodStructs(iface *Interface, m *Method) {
 	paramsStructName := gen.paramsStructName(iface, m)
 	resultsStructName := gen.resultsStructName(iface, m)
 
-	gen.file.Commentf("%s contains parameters for the %s function.", paramsStructName, m.name)
-	gen.file.Comment("It is exported for compatibility with net/rpc and should not be used directly.")
-	gen.file.Type().Id(paramsStructName).StructFunc(func(g *jen.Group) {
-		for i, param := range m.params {
-			if param.iface != nil {
-				g.Id(paramNameEx(i) + "ID").Uint32()
-				continue
+	if len(m.params) != 0 {
+		gen.file.Commentf("%s contains parameters for the %s function.", paramsStructName, m.name)
+		gen.file.Comment("It is exported for compatibility with net/rpc and should not be used directly.")
+		gen.file.Type().Id(paramsStructName).StructFunc(func(g *jen.Group) {
+			for i, param := range m.params {
+				if param.iface != nil {
+					g.Id(paramNameEx(i) + "ID").Uint32()
+					continue
+				}
+
+				g.Id(paramNameEx(i)).Add(tojen.Type(param.typ))
 			}
+		})
+	}
 
-			g.Id(paramNameEx(i)).Add(tojen.Type(param.typ))
-		}
-	})
-
-	gen.file.Commentf("%s contains results for the %s function.", resultsStructName, m.name)
-	gen.file.Comment("It is exported for compatibility with net/rpc and should not be used directly.")
-	gen.file.Type().Id(resultsStructName).StructFunc(func(g *jen.Group) {
-		for i, result := range m.results {
-			g.Id(resultNameEx(i)).Add(tojen.Type(result.typ))
-		}
-	})
+	if len(m.results) != 0 {
+		gen.file.Commentf("%s contains results for the %s function.", resultsStructName, m.name)
+		gen.file.Comment("It is exported for compatibility with net/rpc and should not be used directly.")
+		gen.file.Type().Id(resultsStructName).StructFunc(func(g *jen.Group) {
+			for i, result := range m.results {
+				g.Id(resultNameEx(i)).Add(tojen.Type(result.typ))
+			}
+		})
+	}
 }
 
 func (gen *Generator) generateRPCClientMethod(iface *Interface, m *Method) {
@@ -197,6 +201,7 @@ func (gen *Generator) generateRPCClientMethod(iface *Interface, m *Method) {
 	paramsStructName := gen.paramsStructName(iface, m)
 	resultsStructName := gen.resultsStructName(iface, m)
 
+	gen.file.Commentf("%s implements %s for the %s interface.", m.name, m.name, interfaceName)
 	gen.file.Func().
 		Params(jen.Id("c").Op("*").Id(clientName)).
 		Id(m.name).
@@ -229,34 +234,43 @@ func (gen *Generator) generateRPCClientMethod(iface *Interface, m *Method) {
 
 				g.Go().Id("c").Dot("broker").Dot("AcceptAndServe").Call(
 					jen.Id(idName),
-					jen.Op("&").Id(paramServerName).Values(jen.Dict{
-						jen.Id("impl"): jen.Id(paramName(i)),
-					}),
+					jen.Id("New"+paramServerName).Call(
+						jen.Id("c").Dot("broker"),
+						jen.Id(paramName(i)),
+					),
 				)
 
 				g.Line()
 			}
 
-			g.Id(paramsStructID).Op(":=").
-				Op("&").Id(paramsStructName).
-				Values(jen.DictFunc(func(d jen.Dict) {
-					for i, param := range m.params {
-						if !*allowerror && isError(param.typ) {
-							d[jen.Id(paramNameEx(i))] = jen.Qual(gopluginPath, "NewBasicError").
-								Call(jen.Id(paramName(i)))
-							continue
+			if len(m.params) == 0 {
+				g.Id(paramsStructID).Op(":=").New(jen.Interface())
+			} else {
+				g.Id(paramsStructID).Op(":=").
+					Op("&").Id(paramsStructName).
+					Values(jen.DictFunc(func(d jen.Dict) {
+						for i, param := range m.params {
+							if !*allowerror && isError(param.typ) {
+								d[jen.Id(paramNameEx(i))] = jen.Qual(gopluginPath, "NewBasicError").
+									Call(jen.Id(paramName(i)))
+								continue
+							}
+
+							if types.IsInterface(param.typ) {
+								d[jen.Id(paramNameEx(i)+"ID")] = jen.Id(paramName(i) + "id")
+								continue
+							}
+
+							d[jen.Id(paramNameEx(i))] = jen.Id(paramName(i))
 						}
+					}))
+			}
 
-						if types.IsInterface(param.typ) {
-							d[jen.Id(paramNameEx(i)+"ID")] = jen.Id(paramName(i) + "id")
-							continue
-						}
-
-						d[jen.Id(paramNameEx(i))] = jen.Id(paramName(i))
-					}
-				}))
-
-			g.Id(resultsStructID).Op(":=").Op("&").Id(resultsStructName).Values()
+			if len(m.results) == 0 {
+				g.Id(resultsStructID).Op(":=").New(jen.Interface())
+			} else {
+				g.Id(resultsStructID).Op(":=").Op("&").Id(resultsStructName).Values()
+			}
 
 			g.Line()
 
@@ -294,10 +308,19 @@ func (gen *Generator) generateRPCServerMethod(iface *Interface, m *Method) {
 	gen.file.Func().
 		Params(jen.Id("s").Op("*").Id(serverName)).
 		Id(m.name).
-		Params(
-			jen.Id(paramsStructID).Op("*").Id(paramsStructName),
-			jen.Id(resultsStructID).Op("*").Id(resultsStructName),
-		).
+		ParamsFunc(func(g *jen.Group) {
+			if len(m.params) == 0 {
+				g.Id("_").Interface()
+			} else {
+				g.Id(paramsStructID).Op("*").Id(paramsStructName)
+			}
+
+			if len(m.results) == 0 {
+				g.Id("_").Op("*").Interface()
+			} else {
+				g.Id(resultsStructID).Op("*").Id(resultsStructName)
+			}
+		}).
 		Params(jen.Error()).
 		BlockFunc(func(g *jen.Group) {
 			for i, param := range m.params {
