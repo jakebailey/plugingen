@@ -3,6 +3,10 @@ package main
 import (
 	"fmt"
 	"go/types"
+	"hash"
+	"hash/fnv"
+	"io"
+	"log"
 
 	"github.com/jakebailey/plugingen/tojen"
 
@@ -34,10 +38,22 @@ func NewGenerator(file *jen.File) *Generator {
 	}
 }
 
-func (gen *Generator) generate(iface *Interface) {
-	gen.generateInterface(iface)
-	gen.generatePlugin(iface)
-	gen.generateRPC(iface)
+func (gen *Generator) generate(ifaces []*Interface) {
+	h := fnv.New128a()
+
+	for _, iface := range ifaces {
+		log.Println("generating plugin for", iface.typ)
+		gen.generateInterface(iface)
+		gen.generatePlugin(iface)
+		gen.generateRPC(iface)
+
+		typeString := iface.typ.Underlying().String()
+		if _, err := io.WriteString(h, typeString); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	gen.generateHandshake(h)
 }
 
 func (gen *Generator) generateInterface(iface *Interface) {
@@ -396,54 +412,14 @@ func (gen *Generator) generateRPCServerMethod(iface *Interface, m *Method) {
 		})
 }
 
-func (gen *Generator) interfaceName(iface *Interface) (name string, exists bool) {
-	if name, ok := gen.ifaceNames[iface]; ok {
-		return name, true
-	}
+func (gen *Generator) generateHandshake(h hash.Hash) {
+	sum := fmt.Sprintf("%x", h.Sum(nil))
 
-	if named, ok := iface.typ.(*types.Named); ok {
-		name := named.Obj().Name()
-		gen.ifaceNames[iface] = name
-		return name, false
-	}
-
-	return gen.interfaceNameUnnamed(iface.typ)
-}
-
-func (gen *Generator) interfaceNameUnnamed(typ types.Type) (name string, exists bool) {
-	t := typ.Underlying().(*types.Interface)
-
-	if name, ok := gen.ifaceUnnamed[t]; ok {
-		return name, true
-	}
-
-	name = fmt.Sprintf("Z_Interface%d", gen.ifaceUnnamedCount)
-	gen.ifaceUnnamedCount++
-	gen.ifaceUnnamed[t] = name
-	return name, false
-}
-
-func (gen *Generator) pluginName(iface *Interface) string {
-	name, _ := gen.interfaceName(iface)
-	return name + "Plugin"
-}
-
-func (gen *Generator) clientName(iface *Interface) string {
-	name, _ := gen.interfaceName(iface)
-	return name + "RPCClient"
-}
-
-func (gen *Generator) serverName(iface *Interface) string {
-	name, _ := gen.interfaceName(iface)
-	return name + "RPCServer"
-}
-
-func (gen *Generator) paramsStructName(iface *Interface, m *Method) string {
-	interfaceName, _ := gen.interfaceName(iface)
-	return "Z_" + interfaceName + "_" + m.name + "Params"
-}
-
-func (gen *Generator) resultsStructName(iface *Interface, m *Method) string {
-	interfaceName, _ := gen.interfaceName(iface)
-	return "Z_" + interfaceName + "_" + m.name + "Results"
+	gen.file.Comment("PluginHandshake is a plugin handshake generated from the input interfaces.")
+	gen.file.Var().Id("PluginHandshake").Op("=").
+		Qual(gopluginPath, "HandshakeConfig").Values(jen.Dict{
+		jen.Id("ProtocolVersion"):  jen.Lit(1),
+		jen.Id("MagicCookieKey"):   jen.Lit("PLUGINGEN_MAGIC_COOKIE_KEY"),
+		jen.Id("MagicCookieValue"): jen.Lit(sum),
+	})
 }
