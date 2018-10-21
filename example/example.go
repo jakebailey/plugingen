@@ -1,4 +1,4 @@
-package testdata
+package example
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-//go:generate go run .. -type=Thinger -subpkg=plugingen .
+//go:generate go run .. -type=Thinger -subpkg=exampleplug .
 
 type Thinger interface {
 	Simple()
