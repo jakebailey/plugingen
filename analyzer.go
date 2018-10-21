@@ -3,6 +3,7 @@ package main
 import (
 	"go/types"
 	"log"
+	"sort"
 
 	"golang.org/x/tools/go/types/typeutil"
 )
@@ -21,8 +22,9 @@ func NewAnalyzer() *Analyzer {
 }
 
 type Interface struct {
-	typ     types.Type
-	methods []*Method
+	typ      types.Type
+	methods  []*Method
+	sortName string
 }
 
 type Method struct {
@@ -38,6 +40,16 @@ type Var struct {
 	iface *Interface
 }
 
+func (a *Analyzer) analyzeAll(ts []types.Type) {
+	for _, t := range ts {
+		a.analyze(t)
+	}
+
+	sort.Slice(a.interfaces, func(i, j int) bool {
+		return a.interfaces[i].sortName < a.interfaces[j].sortName
+	})
+}
+
 func (a *Analyzer) analyze(t types.Type) *Interface {
 	typeString := t.String()
 
@@ -46,7 +58,8 @@ func (a *Analyzer) analyze(t types.Type) *Interface {
 	}
 
 	iface := &Interface{
-		typ: t,
+		typ:      t,
+		sortName: t.String(),
 	}
 
 	a.done[typeString] = iface

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"go/types"
 	"hash"
 	"hash/fnv"
 	"io"
 	"log"
+	"sort"
 
 	"github.com/jakebailey/plugingen/tojen"
 
@@ -40,6 +42,8 @@ func NewGenerator(file *jen.File) *Generator {
 
 func (gen *Generator) generate(ifaces []*Interface) {
 	h := fnv.New128a()
+	imports := map[string]bool{}
+	buf := &bytes.Buffer{}
 
 	for _, iface := range ifaces {
 		log.Println("generating plugin for", iface.typ)
@@ -47,8 +51,28 @@ func (gen *Generator) generate(ifaces []*Interface) {
 		gen.generatePlugin(iface)
 		gen.generateRPC(iface)
 
-		typeString := iface.typ.Underlying().String()
-		if _, err := io.WriteString(h, typeString); err != nil {
+		qf := func(pkg *types.Package) string {
+			path := pkg.Path()
+			imports[path] = true
+			return path
+		}
+
+		buf.Reset()
+		types.WriteType(buf, iface.typ.Underlying(), qf)
+
+		if _, err := buf.WriteTo(h); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	importsSlice := make([]string, 0, len(imports))
+	for imp := range imports {
+		importsSlice = append(importsSlice, imp)
+	}
+	sort.Strings(importsSlice)
+
+	for _, imp := range importsSlice {
+		if _, err := io.WriteString(h, imp); err != nil {
 			log.Fatal(err)
 		}
 	}
