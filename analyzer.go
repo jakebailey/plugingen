@@ -59,7 +59,7 @@ func (a *Analyzer) analyze(t types.Type) *Interface {
 
 	iface := &Interface{
 		typ:      t,
-		sortName: t.String(),
+		sortName: typeString,
 	}
 
 	a.done[typeString] = iface
@@ -84,7 +84,7 @@ func (a *Analyzer) analyze(t types.Type) *Interface {
 		if variadic {
 			last := params[len(params)-1].Type().Underlying().(*types.Slice).Elem()
 			if types.IsInterface(last) {
-				log.Fatalf("variadic interface arguments are unsupported: %s.%s", typeString, methodName)
+				log.Fatalf("error: variadic interface arguments in %s.%s are unsupported", typeString, methodName)
 			}
 		}
 
@@ -98,6 +98,12 @@ func (a *Analyzer) analyze(t types.Type) *Interface {
 
 			if isPluggable(typ) {
 				v.iface = a.analyze(typ)
+			} else {
+				if isEmptyInterface(typ) {
+					log.Printf("warning: empty interface parameter in %s.%s may not be compatible", typeString, methodName)
+				} else if *allowerror && isError(typ) {
+					log.Printf("warning: error interface parameter in %s.%s may not be compatible", typeString, methodName)
+				}
 			}
 
 			method.params = append(method.params, v)
@@ -112,7 +118,13 @@ func (a *Analyzer) analyze(t types.Type) *Interface {
 			}
 
 			if isPluggable(typ) {
-				log.Fatalf("returning an interface is unsupported: %s.%s", typeString, methodName)
+				log.Fatalf("error: non-empty or error interface return in %s.%s is unsupported", typeString, methodName)
+			} else {
+				if isEmptyInterface(typ) {
+					log.Printf("warning: empty interface result in %s.%s may not be compatible", typeString, methodName)
+				} else if *allowerror && isError(typ) {
+					log.Printf("warning: error interface result in %s.%s may not be compatible", typeString, methodName)
+				}
 			}
 
 			method.results = append(method.results, v)
