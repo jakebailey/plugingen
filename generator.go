@@ -296,7 +296,7 @@ func (gen *Generator) generateRPCClientMethod(iface *Interface, m *Method) {
 								continue
 							}
 
-							if types.IsInterface(param.typ) {
+							if param.iface != nil {
 								d[jen.Id(paramNameEx(i)+"ID")] = jen.Id(paramName(i) + "id")
 								continue
 							}
