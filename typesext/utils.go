@@ -1,22 +1,22 @@
-package main
+package typesext
 
 import "go/types"
 
-func isEmptyInterface(t types.Type) bool {
+func IsEmptyInterface(t types.Type) bool {
 	iface, ok := t.Underlying().(*types.Interface)
 	return ok && iface.Empty()
 }
 
-func isError(t types.Type) bool {
+func IsError(t types.Type) bool {
 	iface, ok := t.Underlying().(*types.Interface)
 	return ok && iface.String() == "interface{Error() string}"
 }
 
-func isPluggable(t types.Type) bool {
-	return types.IsInterface(t) && !isEmptyInterface(t) && !isError(t)
+func IsPluggable(t types.Type) bool {
+	return types.IsInterface(t) && !IsEmptyInterface(t) && !IsError(t)
 }
 
-func isPointerLike(t types.Type) bool {
+func IsPointerLike(t types.Type) bool {
 	t = t.Underlying()
 	switch t.(type) {
 	case *types.Pointer, *types.Map, *types.Chan:

@@ -1,46 +1,50 @@
-package main
+package analyzer
 
 import (
 	"go/types"
 	"log"
 	"sort"
 
+	"github.com/jakebailey/plugingen/typesext"
 	"golang.org/x/tools/go/types/typeutil"
 )
 
 type Analyzer struct {
+	allowError bool
+
 	done       map[string]*Interface
 	interfaces []*Interface
 
 	cache typeutil.MethodSetCache
 }
 
-func NewAnalyzer() *Analyzer {
+func NewAnalyzer(allowError bool) *Analyzer {
 	return &Analyzer{
-		done: map[string]*Interface{},
+		allowError: allowError,
+		done:       map[string]*Interface{},
 	}
 }
 
 type Interface struct {
-	typ      types.Type
-	methods  []*Method
+	Typ      types.Type
+	Methods  []*Method
 	sortName string
 }
 
 type Method struct {
-	name     string
-	params   []*Var
-	results  []*Var
-	variadic bool
+	Name     string
+	Params   []*Var
+	Results  []*Var
+	Variadic bool
 }
 
 type Var struct {
-	name  string
-	typ   types.Type
-	iface *Interface
+	Name  string
+	Typ   types.Type
+	IFace *Interface
 }
 
-func (a *Analyzer) analyzeAll(ts []types.Type) {
+func (a *Analyzer) AnalyzeAll(ts []types.Type) []*Interface {
 	for _, t := range ts {
 		a.analyze(t)
 	}
@@ -48,6 +52,15 @@ func (a *Analyzer) analyzeAll(ts []types.Type) {
 	sort.Slice(a.interfaces, func(i, j int) bool {
 		return a.interfaces[i].sortName < a.interfaces[j].sortName
 	})
+
+	ret := a.interfaces
+	a.interfaces = nil
+
+	for k := range a.done {
+		delete(a.done, k)
+	}
+
+	return ret
 }
 
 func (a *Analyzer) analyze(t types.Type) *Interface {
@@ -58,7 +71,7 @@ func (a *Analyzer) analyze(t types.Type) *Interface {
 	}
 
 	iface := &Interface{
-		typ:      t,
+		Typ:      t,
 		sortName: typeString,
 	}
 
@@ -75,10 +88,10 @@ func (a *Analyzer) analyze(t types.Type) *Interface {
 		variadic := sig.Variadic()
 
 		method := &Method{
-			name:     methodName,
-			params:   make([]*Var, 0, len(params)),
-			results:  make([]*Var, 0, len(results)),
-			variadic: variadic,
+			Name:     methodName,
+			Params:   make([]*Var, 0, len(params)),
+			Results:  make([]*Var, 0, len(results)),
+			Variadic: variadic,
 		}
 
 		if variadic {
@@ -92,47 +105,47 @@ func (a *Analyzer) analyze(t types.Type) *Interface {
 			typ := param.Type()
 
 			v := &Var{
-				name: param.Name(),
-				typ:  typ,
+				Name: param.Name(),
+				Typ:  typ,
 			}
 
-			if isPluggable(typ) {
-				v.iface = a.analyze(typ)
+			if typesext.IsPluggable(typ) {
+				v.IFace = a.analyze(typ)
 			} else {
-				if isEmptyInterface(typ) {
+				if typesext.IsEmptyInterface(typ) {
 					log.Printf("warning: empty interface parameter in %s.%s may not be compatible", typeString, methodName)
-				} else if *allowerror && isError(typ) {
+				} else if a.allowError && typesext.IsError(typ) {
 					log.Printf("warning: error interface parameter in %s.%s may not be compatible", typeString, methodName)
-				} else if isPointerLike(typ) {
+				} else if typesext.IsPointerLike(typ) {
 					log.Printf("warning: pointer-like parameter in %s.%s, writes made in a plugin will not propogate", typeString, methodName)
 				}
 			}
 
-			method.params = append(method.params, v)
+			method.Params = append(method.Params, v)
 		}
 
 		for _, result := range results {
 			typ := result.Type()
 
 			v := &Var{
-				name: result.Name(),
-				typ:  typ,
+				Name: result.Name(),
+				Typ:  typ,
 			}
 
-			if isPluggable(typ) {
+			if typesext.IsPluggable(typ) {
 				log.Fatalf("error: non-empty or error interface return in %s.%s is unsupported", typeString, methodName)
 			} else {
-				if isEmptyInterface(typ) {
+				if typesext.IsEmptyInterface(typ) {
 					log.Printf("warning: empty interface result in %s.%s may not be compatible", typeString, methodName)
-				} else if *allowerror && isError(typ) {
+				} else if a.allowError && typesext.IsError(typ) {
 					log.Printf("warning: error interface result in %s.%s may not be compatible", typeString, methodName)
 				}
 			}
 
-			method.results = append(method.results, v)
+			method.Results = append(method.Results, v)
 		}
 
-		iface.methods = append(iface.methods, method)
+		iface.Methods = append(iface.Methods, method)
 	}
 
 	a.interfaces = append(a.interfaces, iface)

@@ -1,22 +1,24 @@
-package main
+package generator
 
 import (
 	"fmt"
 	"go/types"
+
+	"github.com/jakebailey/plugingen/analyzer"
 )
 
-func (gen *Generator) interfaceName(iface *Interface) (name string, exists bool) {
+func (gen *Generator) interfaceName(iface *analyzer.Interface) (name string, exists bool) {
 	if name, ok := gen.ifaceNames[iface]; ok {
 		return name, true
 	}
 
-	if named, ok := iface.typ.(*types.Named); ok {
+	if named, ok := iface.Typ.(*types.Named); ok {
 		name := named.Obj().Name()
 		gen.ifaceNames[iface] = name
 		return name, false
 	}
 
-	return gen.interfaceNameUnnamed(iface.typ)
+	return gen.interfaceNameUnnamed(iface.Typ)
 }
 
 func (gen *Generator) interfaceNameUnnamed(typ types.Type) (name string, exists bool) {
@@ -32,29 +34,29 @@ func (gen *Generator) interfaceNameUnnamed(typ types.Type) (name string, exists 
 	return name, false
 }
 
-func (gen *Generator) pluginName(iface *Interface) string {
+func (gen *Generator) pluginName(iface *analyzer.Interface) string {
 	name, _ := gen.interfaceName(iface)
 	return name + "Plugin"
 }
 
-func (gen *Generator) clientName(iface *Interface) string {
+func (gen *Generator) clientName(iface *analyzer.Interface) string {
 	name, _ := gen.interfaceName(iface)
 	return name + "RPCClient"
 }
 
-func (gen *Generator) serverName(iface *Interface) string {
+func (gen *Generator) serverName(iface *analyzer.Interface) string {
 	name, _ := gen.interfaceName(iface)
 	return name + "RPCServer"
 }
 
-func (gen *Generator) paramsStructName(iface *Interface, m *Method) string {
+func (gen *Generator) paramsStructName(iface *analyzer.Interface, m *analyzer.Method) string {
 	interfaceName, _ := gen.interfaceName(iface)
-	return "Z_" + interfaceName + "_" + m.name + "Params"
+	return "Z_" + interfaceName + "_" + m.Name + "Params"
 }
 
-func (gen *Generator) resultsStructName(iface *Interface, m *Method) string {
+func (gen *Generator) resultsStructName(iface *analyzer.Interface, m *analyzer.Method) string {
 	interfaceName, _ := gen.interfaceName(iface)
-	return "Z_" + interfaceName + "_" + m.name + "Results"
+	return "Z_" + interfaceName + "_" + m.Name + "Results"
 }
 
 var paramNameMap = map[int]string{}
