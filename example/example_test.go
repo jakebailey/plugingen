@@ -86,7 +86,9 @@ func helperProcess(args ...string) *exec.Cmd {
 		panic("empty args")
 	}
 
-	cmd := exec.Command(os.Args[0], append([]string{"-test.run=TestHelperProcess", "--"}, args...)...)
+	args = append([]string{"-test.run=TestHelperProcess", "--"}, args...)
+
+	cmd := exec.Command(os.Args[0], args...)
 	cmd.Env = append([]string{helperEnvVar + "=1"}, os.Environ()...)
 	return cmd
 }
