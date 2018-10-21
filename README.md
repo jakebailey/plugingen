@@ -1,6 +1,6 @@
 # plugingen
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/jakebailey/plugingen)](https://goreportcard.com/report/github.com/jakebailey/plugingen) [![Build Status](https://travis-ci.com/jakebailey/plugingen.svg?branch=master)](https://travis-ci.com/jakebailey/plugingen)
+[![Go Report Card](https://goreportcard.com/badge/github.com/jakebailey/plugingen)](https://goreportcard.com/report/github.com/jakebailey/plugingen) [![Build Status](https://travis-ci.com/jakebailey/plugingen.svg?branch=master)](https://travis-ci.com/jakebailey/plugingen) [![Coverage Status](https://coveralls.io/repos/github/jakebailey/plugingen/badge.svg?branch=master)](https://coveralls.io/github/jakebailey/plugingen?branch=master)
 
 ```
 go get -u github.com/jakebailey/plugingen
