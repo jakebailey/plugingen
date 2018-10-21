@@ -1,18 +1,52 @@
 package example_test
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
-
 	plugin "github.com/hashicorp/go-plugin"
 	"github.com/jakebailey/plugingen/example"
 	"github.com/jakebailey/plugingen/example/exampleplug"
 )
 
-func TestThingerOneArgOneReturn(t *testing.T) {
+type fakeThinger struct{}
+
+var _ example.Thinger = fakeThinger{}
+
+func (fakeThinger) String() string {
+	return "fakeThinger"
+}
+
+func (fakeThinger) DoNothing() {}
+
+func (fakeThinger) Sum(vs ...int) int {
+	sum := 0
+	for _, v := range vs {
+		sum += v
+	}
+	return sum
+}
+
+func (fakeThinger) Copy(w io.Writer, r io.Reader) (int64, error) {
+	return io.Copy(w, r)
+}
+
+func (fakeThinger) ErrorToError(err error) error {
+	return err
+}
+
+func (fakeThinger) Identity(v interface{}) interface{} {
+	return v
+}
+
+func (fakeThinger) Replace(s string, i interface{ Replace(string) string }) string {
+	return i.Replace(s)
+}
+
+func TestThingerSum(t *testing.T) {
 	client := plugin.NewClient(&plugin.ClientConfig{
 		Cmd:             helperProcess("thinger"),
 		HandshakeConfig: exampleplug.PluginHandshake,
@@ -35,13 +69,14 @@ func TestThingerOneArgOneReturn(t *testing.T) {
 
 	thinger := raw.(example.Thinger)
 
-	result := thinger.OneArgOneReturn(1234)
-	if result != 1234 {
-		t.Errorf("thinger.OneArgOneReturn(1234) = %v, want 1234", result)
+	got := thinger.Sum(1, 2, 3, 4)
+	want := 1 + 2 + 3 + 4
+	if got != want {
+		t.Errorf("thinger.Sum(1, 2, 3, 4) = %v; want %v", got, want)
 	}
 }
 
-func BenchmarkThingerOneArgOneReturn(b *testing.B) {
+func BenchmarkThingerSum(b *testing.B) {
 	client := plugin.NewClient(&plugin.ClientConfig{
 		Cmd:             helperProcess("thinger"),
 		HandshakeConfig: exampleplug.PluginHandshake,
@@ -66,16 +101,16 @@ func BenchmarkThingerOneArgOneReturn(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		thinger.OneArgOneReturn(1234)
+		thinger.Sum(1, 2, 3, 4)
 	}
 }
 
-func BenchmarkThingerOneArgOneReturnLocal(b *testing.B) {
+func BenchmarkThingerSumLocal(b *testing.B) {
 	thinger := fakeThinger{}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		thinger.OneArgOneReturn(1234)
+		thinger.Sum(1, 2, 3, 4)
 	}
 }
 
@@ -119,12 +154,4 @@ func TestHelperProcess(t *testing.T) {
 			"thinger": exampleplug.NewThingerPlugin(thinger),
 		},
 	})
-}
-
-type fakeThinger struct {
-	example.Thinger
-}
-
-func (fakeThinger) OneArgOneReturn(i int) float32 {
-	return float32(i)
 }

@@ -15,3 +15,13 @@ func isError(t types.Type) bool {
 func isPluggable(t types.Type) bool {
 	return types.IsInterface(t) && !isEmptyInterface(t) && !isError(t)
 }
+
+func isPointerLike(t types.Type) bool {
+	t = t.Underlying()
+	switch t.(type) {
+	case *types.Pointer, *types.Map, *types.Chan:
+		return true
+	}
+
+	return false
+}

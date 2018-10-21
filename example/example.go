@@ -1,7 +1,6 @@
 package example
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 )
@@ -9,24 +8,11 @@ import (
 //go:generate go run .. -type=Thinger -subpkg=exampleplug .
 
 type Thinger interface {
-	Simple()
-	TwoReturns() (int, bool)
-	ErrReturn() (int, error)
-	OneArg(int)
-	TwoArgs(*int, string)
-	OneReturn() int
-	OneArgOneReturn(int) float32
-	TwoArgsTwoReturns(byte, []byte) (int, string)
-	DoubleParams(a, b int)
-	DoubleReturns() (a, b string)
-	Variadic(string, ...int)
-	Imported(bytes.Buffer)
-	ImportedInterface(io.Reader, io.Writer)
-	InterfaceParam(stringer fmt.Stringer)
-	ErrorToError(error) error
-	Literal(interface {
-		Replace(string) string
-	})
-	EmptyInterface(interface{}) interface{}
 	fmt.Stringer
+	DoNothing()
+	Sum(...int) int
+	Copy(io.Writer, io.Reader) (int64, error)
+	ErrorToError(error) error
+	Identity(interface{}) interface{}
+	Replace(string, interface{ Replace(string) string }) string
 }

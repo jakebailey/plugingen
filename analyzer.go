@@ -103,6 +103,8 @@ func (a *Analyzer) analyze(t types.Type) *Interface {
 					log.Printf("warning: empty interface parameter in %s.%s may not be compatible", typeString, methodName)
 				} else if *allowerror && isError(typ) {
 					log.Printf("warning: error interface parameter in %s.%s may not be compatible", typeString, methodName)
+				} else if isPointerLike(typ) {
+					log.Printf("warning: pointer-like parameter in %s.%s, writes made in a plugin will not propogate", typeString, methodName)
 				}
 			}
 
