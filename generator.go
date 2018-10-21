@@ -30,6 +30,8 @@ type Generator struct {
 
 	ifaceUnnamed      map[*types.Interface]string
 	ifaceUnnamedCount int
+
+	registerBasicError bool
 }
 
 func NewGenerator(file *jen.File) *Generator {
@@ -78,6 +80,14 @@ func (gen *Generator) generate(ifaces []*Interface) {
 	}
 
 	gen.generateHandshake(h)
+
+	if gen.registerBasicError {
+		gen.file.Func().Id("init").Params().BlockFunc(func(g *jen.Group) {
+			g.Qual("encoding/gob", "Register").Call(jen.Op("&").Qual(gopluginPath, "BasicError").Values())
+		})
+
+		gen.registerBasicError = false
+	}
 }
 
 func (gen *Generator) generateInterface(iface *Interface) {
@@ -314,6 +324,13 @@ func (gen *Generator) generateRPCClientMethod(iface *Interface, m *Method) {
 
 			g.Line()
 
+			var errFunc string
+			if *rpcpanic {
+				errFunc = "Fatalln"
+			} else {
+				errFunc = "Println"
+			}
+
 			g.If(
 				jen.Id("err").Op(":=").Id("c").Dot("client").Dot("Call").Call(
 					jen.Lit("Plugin."+m.name),
@@ -322,7 +339,7 @@ func (gen *Generator) generateRPCClientMethod(iface *Interface, m *Method) {
 				),
 				jen.Id("err").Op("!=").Nil(),
 			).Block(
-				jen.Qual("log", "Println").Call(
+				jen.Qual("log", errFunc).Call(
 					jen.Lit(fmt.Sprintf("RPC call to %s.%s failed:", interfaceName, m.name)),
 					jen.Id("err").Dot("Error").Call(),
 				),
@@ -423,8 +440,13 @@ func (gen *Generator) generateRPCServerMethod(iface *Interface, m *Method) {
 
 			for i, result := range m.results {
 				if !*allowerror && isError(result.typ) {
-					g.Id(resultsStructID).Dot(resultNameEx(i)).Op("=").
-						Qual(gopluginPath, "NewBasicError").Call(jen.Id(resultName(i)))
+					g.If(jen.Id(resultName(i)).Op("==").Nil()).BlockFunc(func(g *jen.Group) {
+						g.Id(resultsStructID).Dot(resultNameEx(i)).Op("=").Nil()
+					}).Else().BlockFunc(func(g *jen.Group) {
+						g.Id(resultsStructID).Dot(resultNameEx(i)).Op("=").
+							Qual(gopluginPath, "NewBasicError").Call(jen.Id(resultName(i)))
+					})
+					gen.registerBasicError = true
 					continue
 				}
 

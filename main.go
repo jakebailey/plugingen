@@ -22,6 +22,7 @@ var (
 	buildTags  = flag.String("tags", "", "comma-separated list of build tags to apply")
 	allowerror = flag.Bool("allowerror", false, "don't wrap errors with plugin.BasicError")
 	subpkg     = flag.String("subpkg", "", "subpackage name for generated code; if specified, output will be written to <srcdir>/<subpkg>/<output>")
+	rpcpanic   = flag.Bool("panicrpc", false, "panic on RPC call errors")
 )
 
 // Usage is a replacement usage function for the flags package.

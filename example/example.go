@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-//go:generate go run .. -type=Thinger -subpkg=exampleplug .
+//go:generate go run .. -type=Thinger -subpkg=exampleplug -panicrpc .
 
 type Thinger interface {
 	fmt.Stringer

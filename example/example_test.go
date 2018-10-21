@@ -1,9 +1,12 @@
 package example_test
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"os/exec"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/go-hclog"
@@ -11,6 +14,133 @@ import (
 	"github.com/jakebailey/plugingen/example"
 	"github.com/jakebailey/plugingen/example/exampleplug"
 )
+
+func TestString(t *testing.T) {
+	thinger, cleanup := makeThinger(t)
+	defer cleanup()
+
+	got := thinger.String()
+	want := "fakeThinger"
+	if got != want {
+		t.Errorf("thinger.String() = %v; want %v", got, want)
+	}
+}
+
+func TestDoNothing(t *testing.T) {
+	thinger, cleanup := makeThinger(t)
+	defer cleanup()
+
+	thinger.DoNothing()
+}
+
+func TestSum(t *testing.T) {
+	thinger, cleanup := makeThinger(t)
+	defer cleanup()
+
+	got := thinger.Sum(1, 2, 3, 4)
+	want := 1 + 2 + 3 + 4
+	if got != want {
+		t.Errorf("thinger.Sum(1, 2, 3, 4) = %v; want %v", got, want)
+	}
+}
+
+func TestCopy(t *testing.T) {
+	t.Skip("https://github.com/golang/go/issues/23340")
+
+	thinger, cleanup := makeThinger(t)
+	defer cleanup()
+
+	s := "this is a test"
+	r := strings.NewReader(s)
+	buf := &bytes.Buffer{}
+
+	n, err := thinger.Copy(buf, r)
+
+	if n != int64(len(s)) {
+		t.Errorf("thinger.Copy() copied %v bytes; want %v", n, len(s))
+	}
+
+	if err != nil {
+		t.Errorf("thinger.Copy() returned error %v; want nil", err)
+	}
+
+	got := buf.String()
+	if got != s {
+		t.Errorf("thinger.Copy() copied `%v`; want `%v`", got, s)
+	}
+}
+
+func TestErrorToError(t *testing.T) {
+	t.Skip("https://github.com/golang/go/issues/23340")
+
+	thinger, cleanup := makeThinger(t)
+	defer cleanup()
+
+	want := io.EOF
+	got := thinger.ErrorToError(want)
+
+	if got != want {
+		t.Errorf("thinger.ErrorToError() = `%v`; want `%v`", got, want)
+	}
+}
+
+func TestIdentity(t *testing.T) {
+	thinger, cleanup := makeThinger(t)
+	defer cleanup()
+
+	tests := []interface{}{
+		"foo",
+		int(1234),
+		float32(3.14159),
+	}
+
+	for _, want := range tests {
+		got := thinger.Identity(want)
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("thinger.Identity() = `%v`; want `%v`", got, want)
+		}
+	}
+}
+
+type replacer func(string) string
+
+func (r replacer) Replace(s string) string {
+	return r(s)
+}
+
+func TestReplace(t *testing.T) {
+	thinger, cleanup := makeThinger(t)
+	defer cleanup()
+
+	r := replacer(func(s string) string { return s + "bar" })
+
+	input := "foo"
+	want := r.Replace(input)
+	got := thinger.Replace(input, r)
+
+	if got != want {
+		t.Errorf("thinger.Replace() = `%v`; want `%v`", got, want)
+	}
+}
+
+func BenchmarkSum(b *testing.B) {
+	thinger, cleanup := makeThingerExternal(b)
+	defer cleanup()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		thinger.Sum(1, 2, 3, 4)
+	}
+}
+
+func BenchmarkSumLocal(b *testing.B) {
+	thinger := fakeThinger{}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		thinger.Sum(1, 2, 3, 4)
+	}
+}
 
 type fakeThinger struct{}
 
@@ -46,84 +176,54 @@ func (fakeThinger) Replace(s string, i interface{ Replace(string) string }) stri
 	return i.Replace(s)
 }
 
-func TestThingerSum(t *testing.T) {
-	client := plugin.NewClient(&plugin.ClientConfig{
-		Cmd:             helperProcess("thinger"),
-		HandshakeConfig: exampleplug.PluginHandshake,
-		Plugins: map[string]plugin.Plugin{
-			"thinger": exampleplug.NewThingerPlugin(nil),
-		},
-		Logger: hclog.NewNullLogger(),
-	})
-	defer client.Kill()
+var pluginSet = map[string]plugin.Plugin{
+	"thinger": exampleplug.NewThingerPlugin(fakeThinger{}),
+}
 
-	rpcClient, err := client.Client()
+func makeThinger(t *testing.T) (example.Thinger, func()) {
+	client, _ := plugin.TestPluginRPCConn(t, pluginSet, nil)
+
+	raw, err := client.Dispense("thinger")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	raw, err := rpcClient.Dispense("thinger")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	thinger := raw.(example.Thinger)
-
-	got := thinger.Sum(1, 2, 3, 4)
-	want := 1 + 2 + 3 + 4
-	if got != want {
-		t.Errorf("thinger.Sum(1, 2, 3, 4) = %v; want %v", got, want)
+	return raw.(example.Thinger), func() {
+		client.Close()
 	}
 }
 
-func BenchmarkThingerSum(b *testing.B) {
+type Fataler interface {
+	Fatal(...interface{})
+}
+
+func makeThingerExternal(f Fataler) (example.Thinger, func()) {
 	client := plugin.NewClient(&plugin.ClientConfig{
-		Cmd:             helperProcess("thinger"),
+		Cmd:             helperProcess(),
 		HandshakeConfig: exampleplug.PluginHandshake,
-		Plugins: map[string]plugin.Plugin{
-			"thinger": exampleplug.NewThingerPlugin(nil),
-		},
-		Logger: hclog.NewNullLogger(),
+		Plugins:         pluginSet,
+		Logger:          hclog.NewNullLogger(),
 	})
-	defer client.Kill()
 
 	rpcClient, err := client.Client()
 	if err != nil {
-		b.Fatal(err)
+		f.Fatal(err)
 	}
 
 	raw, err := rpcClient.Dispense("thinger")
 	if err != nil {
-		b.Fatal(err)
+		f.Fatal(err)
 	}
 
-	thinger := raw.(example.Thinger)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		thinger.Sum(1, 2, 3, 4)
-	}
-}
-
-func BenchmarkThingerSumLocal(b *testing.B) {
-	thinger := fakeThinger{}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		thinger.Sum(1, 2, 3, 4)
+	return raw.(example.Thinger), func() {
+		client.Kill()
 	}
 }
 
 const helperEnvVar = "PLUGINGEN_TEST_HELPER_PROCESS"
 
-func helperProcess(args ...string) *exec.Cmd {
-	if len(args) == 0 {
-		panic("empty args")
-	}
-
-	args = append([]string{"-test.run=TestHelperProcess", "--"}, args...)
-
-	cmd := exec.Command(os.Args[0], args...)
+func helperProcess() *exec.Cmd {
+	cmd := exec.Command(os.Args[0], "-test.run=TestHelperProcess")
 	cmd.Env = append([]string{helperEnvVar + "=1"}, os.Environ()...)
 	return cmd
 }
@@ -133,25 +233,8 @@ func TestHelperProcess(t *testing.T) {
 		t.Skipf("%s not set", helperEnvVar)
 	}
 
-	args := os.Args[1:]
-	for len(args) > 0 {
-		if args[0] == "--" {
-			args = args[1:]
-			break
-		}
-		args = args[1:]
-	}
-
-	if len(args) == 0 {
-		t.Fatal("no args")
-	}
-
-	thinger := fakeThinger{}
-
 	plugin.Serve(&plugin.ServeConfig{
 		HandshakeConfig: exampleplug.PluginHandshake,
-		Plugins: map[string]plugin.Plugin{
-			"thinger": exampleplug.NewThingerPlugin(thinger),
-		},
+		Plugins:         pluginSet,
 	})
 }
