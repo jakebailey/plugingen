@@ -4,6 +4,7 @@ package tojen
 import (
 	"fmt"
 	"go/types"
+	"strings"
 
 	"github.com/dave/jennifer/jen"
 )
@@ -116,7 +117,15 @@ func typeToJen(t types.Type, visited []types.Type) *jen.Statement {
 	case *types.Named:
 		if obj := t.Obj(); obj != nil {
 			if pkg := obj.Pkg(); pkg != nil {
-				return jen.Qual(pkg.Path(), obj.Name())
+				path := pkg.Path()
+
+				// TODO: Fix this hack for vendored dependencies.
+				if i := strings.LastIndex(path, "/vendor/"); i != -1 {
+					i += len("/vendor/")
+					path = path[i:]
+				}
+
+				return jen.Qual(path, obj.Name())
 			}
 			return jen.Id(obj.Name())
 		}
